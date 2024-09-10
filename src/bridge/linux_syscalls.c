@@ -23,7 +23,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <stdint.h>
-#include <tchar.h>
+
 #include "linux_syscalls.h"
 
 #define __ARG_COUNT(_10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
@@ -39,27 +39,30 @@
 #define __REVERSE(N, ...) _REVERSE_ ## N(__VA_ARGS__)
 #define _REVERSE(N, ...) __REVERSE(N, __VA_ARGS__)
 
-#define linux_syscall_helper(nr, ...) _linux_syscall_helper(nr, _REVERSE(_ARG_COUNT(__VA_ARGS__), __VA_ARGS__))
+#define linux_syscall(nr, ...) _linux_syscall(nr, _REVERSE(_ARG_COUNT(__VA_ARGS__), __VA_ARGS__))
 
-int linux_syscall(syscall_number nr, uintptr_t arg1,
-                     uintptr_t arg2, uintptr_t arg3,
-                     uintptr_t arg4, uintptr_t arg5) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wint-conversion"
 
+inline void* __linux_syscall(syscall_number nr, uint32_t arg1, uint32_t arg2,
+                                 uint32_t arg3, uint32_t arg4, uint32_t arg5) {
 
-    int ret;
+    void *ret;
+
     __asm__ __volatile__ (
         "int 0x80\n\t"
         : "=a" (ret) 
-        : "a" (nr), "b"(arg1), "c"(arg2),
+        : "a" (nr),  "b"(arg1), "c"(arg2),
           "d"(arg3), "S"(arg4), "D"(arg5)
         : "memory", "cc"
-        );
+    );
+    
     return ret;
 }
 
-uintptr_t _linux_syscall_helper(syscall_number nr, ...) {
+void *_linux_syscall(syscall_number nr, ...) {
 
-    uintptr_t arg1, arg2, arg3, arg4, arg5;
+    uint32_t arg1, arg2, arg3, arg4, arg5;
     arg1 = arg2 = arg3 = arg4 = arg5 = 0;
 
     va_list args;
@@ -67,64 +70,60 @@ uintptr_t _linux_syscall_helper(syscall_number nr, ...) {
 
     switch (nr) {
         case MMAP2:
-            arg5 = va_arg(args, uintptr_t);
-            arg4 = va_arg(args, uintptr_t);
+            arg5 = va_arg(args, uint32_t);
+            arg4 = va_arg(args, uint32_t);
             // Fall through
         case READ:
         case WRITE:
         case OPEN:
-            arg3 = va_arg(args, uintptr_t);
+            arg3 = va_arg(args, uint32_t);
             // Fall through
         case SOCKETCALL:
         case MUNMAP:
-            arg2 = va_arg(args, uintptr_t);
+            arg2 = va_arg(args, uint32_t);
             // Fall through
         case CLOSE:
-            arg1 = va_arg(args, uintptr_t);
+            arg1 = va_arg(args, uint32_t);
             break;
     }
 
     va_end(args);
 
-    return linux_syscall(nr, arg1, arg2, arg3, arg4, arg5);
+    return __linux_syscall(nr, arg1, arg2, arg3, arg4, arg5);
 }
 
 ssize_t linux_read(int fd, void *buf, size_t count) {
-    return linux_syscall_helper(READ, fd, buf, count);
+    return linux_syscall(READ, fd, buf, count);
 }
 
 ssize_t linux_write(int fd, const void *buf, size_t count) {
-    return linux_syscall_helper(WRITE, fd, buf, count);
+    return linux_syscall(WRITE, fd, buf, count);
 }
 
 int linux_open(const char *path, int flags, int mode) {
-    return linux_syscall_helper(OPEN, path, flags, mode);
+    return linux_syscall(OPEN, path, flags, mode);
 }
 
 int linux_close(int fd) {
-    return linux_syscall_helper(CLOSE, fd);
+    return linux_syscall(CLOSE, fd);
 }
 
 int linux_socket(int domain, int type, int protocol) {
-    unsigned long args[3] = {0};
-    args[0] = (unsigned long)domain;
-    args[1] = (unsigned long)type;
-    args[2] = (unsigned long)protocol;
-    return linux_syscall_helper(SOCKETCALL, SOCKET, args);
+    uint32_t args[] = { domain, type, protocol };
+    return linux_syscall(SOCKETCALL, SOCKET, args);
 }
 
 int linux_connect(int socket, sockaddr *address, size_t address_len) {
-    unsigned long args[3] = {0};
-    args[0] = (unsigned long)socket;
-    args[1] = (unsigned long)(uintptr_t)address;
-    args[2] = (unsigned long)address_len;
-    return linux_syscall_helper(SOCKETCALL, CONNECT, args);
+    uint32_t args[3] = { socket, (uintptr_t)address, address_len };
+    return linux_syscall(SOCKETCALL, CONNECT, args);
 }
 
 void *linux_mmap2(void *addr, size_t len, int prot, int flags, int fd) {
-    return (void*)linux_syscall_helper(MMAP2, addr, len, prot, flags, fd);
+    return linux_syscall(MMAP2, addr, len, prot, flags, fd);
 }
 
 int linux_munmap(void *addr, size_t len) {
-    return linux_syscall_helper(MUNMAP, addr, len);
+    return linux_syscall(MUNMAP, addr, len);
 }
+
+#pragma GCC diagnostic pop

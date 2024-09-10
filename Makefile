@@ -7,7 +7,7 @@ SRC := $(wildcard $(SRC_DIR)/**/*.c)
 OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRC))
 
 CC			:=		x86_64-w64-mingw32-gcc
-CFLAGS		:=		-masm=intel -std=c99 -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wunreachable-code -Wno-unused-parameter -pedantic -pedantic-errors
+CFLAGS		:=		-masm=intel -std=c99 -O3 -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wunreachable-code -Wno-unused-parameter -pedantic -pedantic-errors
 CPPFLAGS	:=		-Iinclude
 LDFLAGS		:=		
 	

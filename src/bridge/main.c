@@ -36,13 +36,6 @@
 #define AF_UNIX     1
 #define SOCK_STREAM 1
 #define BUFSIZE     2048 // size of read/write buffers
-#define PROT_READ 1
-#define PROT_WRITE 2
-#define MAP_PRIVATE 0x02
-#define MAP_FIXED 0x10
-#define MAP_ANON 0x20
-#define MAP_FAILED ((void *)-1)
-
 
 static HANDLE hPipe;
 static int sock_fd;
@@ -139,7 +132,6 @@ int _tmain() {
         }
 
         sockaddr_un sock_addr = {0};
-
         sock_addr.sun_family = AF_UNIX;
 
         const char *const temp_path = get_sock_parent_path();
