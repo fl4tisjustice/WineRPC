@@ -4,9 +4,8 @@
 
 WineRPC allows Discord Rich Presence to function with games and software running under Wine/Proton.
 
-## Installation
+## Installation & Usage
 
-Prerequisites:
 1. Install `make` and `i686-w64-mingw32-gcc` or an equivalent from your package manager (32-bit MinGW GCC for C).
 2. Run `make` in the project root.
 3. Lastly, just run the `winerpcbridge` located in the `bin` folder under wine **and** int the same wine prefix as the game/software you intend to have Rich Presence work with.
