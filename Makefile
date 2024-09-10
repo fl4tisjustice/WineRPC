@@ -6,8 +6,8 @@ EXE := $(BIN_DIR)/winerpcbridge
 SRC := $(wildcard $(SRC_DIR)/**/*.c)
 OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRC))
 
-CC			:=		i686-w64-mingw32-gcc
-CFLAGS		:=		-masm=intel -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wunreachable-code -pedantic -pedantic-errors
+CC			:=		x86_64-w64-mingw32-gcc
+CFLAGS		:=		-masm=intel -std=c99 -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wunreachable-code -Wno-unused-parameter -pedantic -pedantic-errors
 CPPFLAGS	:=		-Iinclude
 LDFLAGS		:=		
 	
@@ -24,4 +24,4 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf $(BIN_DIR) $(OBJ_DIR)
+	@rm -rf $(BIN_DIR) $(OBJ_DIR) *.s

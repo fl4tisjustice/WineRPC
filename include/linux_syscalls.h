@@ -24,12 +24,20 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define MAP_PRIVATE 0x02
+#define MAP_FIXED 0x10
+#define MAP_ANON 0x20
+
 typedef enum {
     READ        = 0x03,
     WRITE       = 0x04,
     OPEN        = 0x05,
     CLOSE       = 0x06,
     SOCKETCALL  = 0x66,
+    MMAP2       = 0xC0,
+    MUNMAP      = 0x5B
 } syscall_number;
 
 typedef enum {
@@ -37,15 +45,18 @@ typedef enum {
     CONNECT = 0x03
 } socketcall_type;
 
-struct sockaddr {
-    unsigned short  sa_family;      /* Address family */
-    char            sa_data[];      /* Socket address */
-};
+typedef struct {
+    unsigned short sun_family;               /* AF_UNIX */
+    char           sun_path[108];            /* pathname */
+} sockaddr_un;
+
+typedef char sockaddr;
 
 ssize_t linux_read(int fd, void *buf, size_t count);
 ssize_t linux_write(int fd, const void *buf, size_t count);
 int linux_open(const char *path, int flags, int mode);
 int linux_close(int fd);
 int linux_socket(int domain, int type, int protocol);
-int linux_connect(int socket, struct sockaddr *address, size_t address_len);
-
+int linux_connect(int socket, sockaddr *address, size_t address_len);
+void *linux_mmap2(void *addr, size_t len, int prot, int flags, int fd);
+int linux_munmap(void *addr, size_t len);

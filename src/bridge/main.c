@@ -27,6 +27,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdint.h>
 
 #include "linux_syscalls.h"
 
@@ -34,15 +36,16 @@
 #define AF_UNIX     1
 #define SOCK_STREAM 1
 #define BUFSIZE     2048 // size of read/write buffers
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define MAP_PRIVATE 0x02
+#define MAP_FIXED 0x10
+#define MAP_ANON 0x20
+#define MAP_FAILED ((void *)-1)
 
 
 static HANDLE hPipe;
 static int sock_fd;
-
-struct sockaddr_un {
-    unsigned short sun_family;               /* AF_UNIX */
-    char           sun_path[108];            /* pathname */
-};
 
 static const char* get_sock_parent_path() {
     const char *env_tmp_paths[] = {"XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"};
@@ -120,7 +123,6 @@ int _tmain() {
         return -1;
     }
 
-
     // Wait for the client to connect; if it succeeds,
     // the function returns a nonzero value. If the function
     // returns zero, GetLastError returns ERROR_PIPE_CONNECTED.
@@ -129,16 +131,15 @@ int _tmain() {
 
     if (fConnected) {
         printf("Client connected\n");
-
         printf("Creating socket\n");
 
         if ((sock_fd = linux_socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-            perror("Failed to create socket");
+            printf("Failed to create socket: %s\n", strerror(-sock_fd));
             return 1;
         }
 
+        sockaddr_un sock_addr = {0};
 
-        struct sockaddr_un sock_addr = {0};
         sock_addr.sun_family = AF_UNIX;
 
         const char *const temp_path = get_sock_parent_path();
@@ -158,8 +159,8 @@ int _tmain() {
                 snprintf(sock_addr.sun_path, sizeof(sock_addr.sun_path), sock_path_templates[i], temp_path, pipe);
                 printf("Attempting to connect to %s\n", sock_addr.sun_path);
 
-                if ((error = linux_connect(sock_fd, (struct sockaddr*) &sock_addr, sizeof(sock_addr))) < 0)
-                    printf("Failed to connect\n");
+                if ((error = linux_connect(sock_fd, (sockaddr*)&sock_addr, sizeof(sock_addr))) < 0)
+                    printf("Failed to connect: %s\n", strerror(-error));
                 else
                     goto breakout;
             }
