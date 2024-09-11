@@ -1,10 +1,8 @@
 SRC_DIR := src
-OBJ_DIR := obj
 BIN_DIR := bin
 
-EXE := $(BIN_DIR)/winerpcbridge
 SRC := $(wildcard $(SRC_DIR)/**/*.c)
-OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRC))
+EXE := $(BIN_DIR)/bridge.exe
 
 CC			:=		x86_64-w64-mingw32-gcc
 CFLAGS		:=		-masm=intel -std=c99 -O3 -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wunreachable-code -Wno-unused-parameter -pedantic -pedantic-errors
@@ -15,13 +13,11 @@ LDFLAGS		:=
 
 all: $(EXE)
 
-$(EXE): $(OBJ)
-	@mkdir -p $(dir $@)
-	$(CC) $(LDFLAGS) $^ -o $@
+$(EXE): $(SRC) | $(BIN_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+$(BIN_DIR):
+	@mkdir -p $@
 
 clean:
-	@rm -rf $(BIN_DIR) $(OBJ_DIR) *.s
+	@rm -rf $(BIN_DIR) *.s

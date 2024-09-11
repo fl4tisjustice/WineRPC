@@ -24,7 +24,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "linux_syscalls.h"
+#include "utils/linux_utils.h"
 
 #define __ARG_COUNT(_10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
 #define _ARG_COUNT(...) __ARG_COUNT(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
@@ -46,7 +46,6 @@
 
 inline void* __linux_syscall(syscall_number nr, uint32_t arg1, uint32_t arg2,
                                  uint32_t arg3, uint32_t arg4, uint32_t arg5) {
-
     void *ret;
 
     __asm__ __volatile__ (
@@ -114,7 +113,7 @@ int linux_socket(int domain, int type, int protocol) {
 }
 
 int linux_connect(int socket, sockaddr *address, size_t address_len) {
-    uint32_t args[3] = { socket, (uintptr_t)address, address_len };
+    uint32_t args[] = { socket, address, address_len };
     return linux_syscall(SOCKETCALL, CONNECT, args);
 }
 

@@ -30,7 +30,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "linux_syscalls.h"
+#include "utils/linux_utils.h"
+#include "utils/win_utils.h"
 
 #define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
 #define AF_UNIX     1
@@ -71,11 +72,11 @@ DWORD WINAPI winwrite_thread() {
 
         while (total_written < (DWORD)bytes_read) {
             BOOL fSuccess = WriteFile(
-                    hPipe,        // handle to pipe
-                    buf + total_written,     // buffer to write from
+                    hPipe,                      // handle to pipe
+                    buf + total_written,        // buffer to write from
                     bytes_read - total_written, // number of bytes to write
-                    &cbWritten,   // number of bytes written
-                    NULL);        // not overlapped I/O
+                    &cbWritten,                 // number of bytes written
+                    NULL);                      // not overlapped I/O
             if (!fSuccess) {
                 printf("Failed to write to pipe\n");
                 return 1;
@@ -112,7 +113,7 @@ int _tmain() {
         );
 
     if (hPipe == INVALID_HANDLE_VALUE) {
-        _tprintf(TEXT("CreateNamedPipe failed, GLE=%lu.\n"), GetLastError());
+        PrintLastError("CreateNamedPipe failed: ");
         return -1;
     }
 
@@ -134,9 +135,9 @@ int _tmain() {
         sockaddr_un sock_addr = {0};
         sock_addr.sun_family = AF_UNIX;
 
-        const char *const temp_path = get_sock_parent_path();
+        const char *temp_path = get_sock_parent_path();
 
-        char *sock_path_templates[] = {
+        const char *sock_path_templates[] = {
             "%s/discord-ipc-%d",
             "%s/app/com.discordapp.Discord/discord-ipc-%d",
             "%s/snap.discord-canary/discord-ipc-%d",
@@ -178,7 +179,7 @@ breakout:
 
         if (hThread == NULL)
         {
-            _tprintf(TEXT("CreateThread failed, GLE=%lu.\n"), GetLastError());
+            PrintLastError("CreateThread failed: ");
             return 1;
         }
 
