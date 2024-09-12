@@ -41,7 +41,7 @@ LPSTR GetLastErrorAsString(VOID) {
             NULL
         );
 
-    assert(cchBufferLength > 0 && "FormatMessage");
+    assert(cchBufferLength > 0 && "FormatMessage error");
 
     return lpBuffer;
 }
