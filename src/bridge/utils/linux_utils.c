@@ -24,7 +24,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "utils/linux_utils.h"
+#include "bridge/utils/linux_utils.h"
 
 #define __ARG_COUNT(_10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
 #define _ARG_COUNT(...) __ARG_COUNT(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
@@ -44,8 +44,8 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wint-conversion"
 
-inline void* __linux_syscall(syscall_number nr, uint32_t arg1, uint32_t arg2,
-                                 uint32_t arg3, uint32_t arg4, uint32_t arg5) {
+inline void* __linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
+                                  uint32_t arg3, uint32_t arg4, uint32_t arg5) {
     void *ret;
 
     __asm__ __volatile__ (
@@ -59,7 +59,7 @@ inline void* __linux_syscall(syscall_number nr, uint32_t arg1, uint32_t arg2,
     return ret;
 }
 
-void *_linux_syscall(syscall_number nr, ...) {
+void *_linux_syscall(enum syscall_nr nr, ...) {
 
     uint32_t arg1, arg2, arg3, arg4, arg5;
     arg1 = arg2 = arg3 = arg4 = arg5 = 0;
@@ -68,20 +68,20 @@ void *_linux_syscall(syscall_number nr, ...) {
     va_start(args, nr);
 
     switch (nr) {
-        case MMAP2:
+        case NR_MMAP2:
             arg5 = va_arg(args, uint32_t);
             arg4 = va_arg(args, uint32_t);
             // Fall through
-        case READ:
-        case WRITE:
-        case OPEN:
+        case NR_READ:
+        case NR_WRITE:
+        case NR_OPEN:
             arg3 = va_arg(args, uint32_t);
             // Fall through
-        case SOCKETCALL:
-        case MUNMAP:
+        case NR_SOCKETCALL:
+        case NR_MUNMAP:
             arg2 = va_arg(args, uint32_t);
             // Fall through
-        case CLOSE:
+        case NR_CLOSE:
             arg1 = va_arg(args, uint32_t);
             break;
     }
@@ -92,37 +92,37 @@ void *_linux_syscall(syscall_number nr, ...) {
 }
 
 ssize_t linux_read(int fd, void *buf, size_t count) {
-    return linux_syscall(READ, fd, buf, count);
+    return linux_syscall(NR_READ, fd, buf, count);
 }
 
 ssize_t linux_write(int fd, const void *buf, size_t count) {
-    return linux_syscall(WRITE, fd, buf, count);
+    return linux_syscall(NR_WRITE, fd, buf, count);
 }
 
 int linux_open(const char *path, int flags, int mode) {
-    return linux_syscall(OPEN, path, flags, mode);
+    return linux_syscall(NR_OPEN, path, flags, mode);
 }
 
 int linux_close(int fd) {
-    return linux_syscall(CLOSE, fd);
+    return linux_syscall(NR_CLOSE, fd);
 }
 
 int linux_socket(int domain, int type, int protocol) {
     uint32_t args[] = { domain, type, protocol };
-    return linux_syscall(SOCKETCALL, SOCKET, args);
+    return linux_syscall(NR_SOCKETCALL, SC_SOCKET, args);
 }
 
 int linux_connect(int socket, sockaddr *address, size_t address_len) {
     uint32_t args[] = { socket, address, address_len };
-    return linux_syscall(SOCKETCALL, CONNECT, args);
+    return linux_syscall(NR_SOCKETCALL, SC_CONNECT, args);
 }
 
 void *linux_mmap2(void *addr, size_t len, int prot, int flags, int fd) {
-    return linux_syscall(MMAP2, addr, len, prot, flags, fd);
+    return linux_syscall(NR_MMAP2, addr, len, prot, flags, fd);
 }
 
 int linux_munmap(void *addr, size_t len) {
-    return linux_syscall(MUNMAP, addr, len);
+    return linux_syscall(NR_MUNMAP, addr, len);
 }
 
 #pragma GCC diagnostic pop

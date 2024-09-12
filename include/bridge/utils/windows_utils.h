@@ -19,28 +19,10 @@
     the source code in the root of the project.
  ====================================================================== */
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <tchar.h>
-#include <assert.h>
+#pragma once
 
-#include "utils/win_utils.h"
+#include <windef.h>
 
-LPTSTR GetLastErrorAsString(VOID) {
-    LPTSTR lpBuffer = NULL;
-    DWORD dwErrorCode = GetLastError();
+LPTSTR GetLastErrorAsString(VOID);
+int winprintf(const char *fmt, ...);
 
-    DWORD cchBufferLength = FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        dwErrorCode,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPTSTR)&lpBuffer,
-        0,
-        NULL
-    );
-
-    assert(cchBufferLength > 0 && "FormatMessage");
-
-    return lpBuffer;
-}

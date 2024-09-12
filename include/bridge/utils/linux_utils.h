@@ -30,20 +30,20 @@
 #define MAP_FIXED 0x10
 #define MAP_ANON 0x20
 
-typedef enum {
-    READ        = 0x03,
-    WRITE       = 0x04,
-    OPEN        = 0x05,
-    CLOSE       = 0x06,
-    SOCKETCALL  = 0x66,
-    MMAP2       = 0xC0,
-    MUNMAP      = 0x5B
-} syscall_number;
+enum syscall_nr {
+    NR_READ        = 0x03,
+    NR_WRITE       = 0x04,
+    NR_OPEN        = 0x05,
+    NR_CLOSE       = 0x06,
+    NR_SOCKETCALL  = 0x66,
+    NR_MMAP2       = 0xC0,
+    NR_MUNMAP      = 0x5B
+};
 
-typedef enum {
-    SOCKET  = 0x01,
-    CONNECT = 0x03
-} socketcall_type;
+enum socketcall_type{
+    SC_SOCKET  = 0x01,
+    SC_CONNECT = 0x03
+};
 
 typedef struct {
     unsigned short sun_family;               /* AF_UNIX */

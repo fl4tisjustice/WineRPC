@@ -19,16 +19,40 @@
     the source code in the root of the project.
  ====================================================================== */
 
-#pragma once
-
-#include <windef.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <tchar.h>
+#include <assert.h>
+#include <stdarg.h>
 
-#define PrintLastError(lpErrorMessageTemplate)                              \
-    do {                                                                    \
-        LPTSTR _lpBuffer = GetLastErrorAsString();                          \
-        _tprintf("%s%s", TEXT(lpErrorMessageTemplate), _lpBuffer);          \
-        (VOID)LocalFree(_lpBuffer);                                         \
-    } while (0);
+#include "bridge/utils/windows_utils.h"
 
-LPTSTR GetLastErrorAsString(VOID);
+LPTSTR GetLastErrorAsString(VOID) {
+    LPTSTR lpBuffer = NULL;
+    DWORD dwErrorCode = GetLastError();
+
+    DWORD cchBufferLength =
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            dwErrorCode,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPTSTR)&lpBuffer,
+            0,
+            NULL
+        );
+
+    assert(cchBufferLength > 0 && "FormatMessage");
+
+    return lpBuffer;
+}
+
+int winprintf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    int ret = _vtprintf(_T(fmt), args);
+
+    va_end(args);
+    return ret;
+}
