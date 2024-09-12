@@ -23,6 +23,4 @@
 
 #include <windef.h>
 
-LPTSTR GetLastErrorAsString(VOID);
-int winprintf(const char *fmt, ...);
-
+LPSTR GetLastErrorAsString(VOID);

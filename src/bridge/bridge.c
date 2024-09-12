@@ -23,7 +23,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <tchar.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,6 +36,7 @@
 #include "bridge/log.h"
 
 #define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #define AF_UNIX     1
 #define SOCK_STREAM 1
 #define BUFSIZE     2048 // size of read/write buffers
@@ -58,16 +58,13 @@ static const char* get_sock_parent_path() {
 }
 
 DWORD WINAPI winwrite_thread() {
-
     while (TRUE) {
-
         char buf[BUFSIZE];
         ssize_t bytes_read = linux_read(sock_fd, buf, BUFSIZE);
 
         if (bytes_read < 0) {
-            bridge_log(LL_ERROR, "Failed to read from socket: %s.\n", _T(strerror(-bytes_read)));
-            linux_close(sock_fd);
-            return EXIT_FAILURE;
+            bridge_log(LL_ERROR, "Failed to read from socket: %s.\n", strerror(-bytes_read));
+            break;
         } else if (bytes_read == 0) {
             bridge_log(LL_WARNING, "Connection closed by Discord client.\n");
             break;
@@ -77,47 +74,52 @@ DWORD WINAPI winwrite_thread() {
 
         DWORD total_written = 0, cbWritten = 0;
 
+        // Positive value so safe conversion
         while (total_written < (DWORD)bytes_read) {
+            // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
             BOOL fSuccess = WriteFile(
-                    hPipe,                      // handle to pipe
-                    buf + total_written,        // buffer to write from
-                    bytes_read - total_written, // number of bytes to write
-                    &cbWritten,                 // number of bytes written
-                    NULL);                      // not overlapped I/O
+                hPipe,                      // Pipe handle
+                buf + total_written,        // Buffer to write from
+                bytes_read - total_written, // Remaining unwritten bytes
+                &cbWritten,                 // Pointer to receive number of bytes written
+                NULL
+            );
+                                  // not overlapped I/O
             if (!fSuccess) {
                 LPTSTR lpBuffer = GetLastErrorAsString();
                 bridge_log(LL_ERROR, "Failed to write to named pipe: %s", lpBuffer);
                 LocalFree(lpBuffer);
-                return EXIT_FAILURE;
+                break;
             }
+
             total_written += cbWritten;
             cbWritten = 0;
         }
     }
 
-    return EXIT_SUCCESS;
+    CancelIoEx(hPipe, NULL);
+    return EXIT_FAILURE;
 }
 
-
- int _tmain(int argc, _TCHAR *argv[])  {
+int main(int argc, char *argv[])  {
+    int exit_code = EXIT_SUCCESS;
 
     parse_args(argc, argv);
     
     if (g_log_level == _INVALID) {
         g_log_level = LL_WARNING;
-        bridge_log(LL_WARNING, "Log level not set, assuming \"none.\"\n");
+        bridge_log(LL_WARNING, "Log level not set, assuming \"none\".\n");
         g_log_level = LL_NONE;
     }
 
-    BOOL    fConnected   = FALSE;
     DWORD   dwThreadId   = 0;
     HANDLE  hThread      = NULL;
-    LPCTSTR lpszPipename = _T("\\\\.\\pipe\\discord-ipc-0");
+    LPCSTR  lpszPipename = "\\\\.\\pipe\\discord-ipc-0";
 
-    bridge_log(LL_INFO, "Awaiting RPC client connection from named pipe at \"%s\".\n", lpszPipename);
+    bridge_log(LL_INFO, "Creating named pipe for connection to RPC client at \"%s\".\n", lpszPipename);
 
     // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea
-    hPipe = CreateNamedPipe(        // ! Blocking !
+    hPipe = CreateNamedPipeA(
             lpszPipename,           // pipe name
             PIPE_ACCESS_DUPLEX,     // read/write access
             PIPE_TYPE_BYTE |        // message type pipe
@@ -132,124 +134,129 @@ DWORD WINAPI winwrite_thread() {
 
     if (hPipe == INVALID_HANDLE_VALUE) {
         LPTSTR lpBuffer = GetLastErrorAsString();
-        bridge_log(LL_ERROR, "Failed to connect to RPC client via named pipe: %s", lpBuffer); 
+        bridge_log(LL_ERROR, "Failed to create named pipe: %s", lpBuffer); 
         LocalFree(lpBuffer);
-        return EXIT_FAILURE;
+        exit_code = EXIT_FAILURE; goto exit;
     }
 
-    // Wait for the client to connect; if it succeeds,
-    // the function returns a nonzero value. If the function
-    // returns zero, GetLastError returns ERROR_PIPE_CONNECTED.
+    bridge_log(LL_INFO, "Successfully created named pipe.\n");
+    bridge_log(LL_INFO, "Awaiting connection from RPC client.\n");
 
-    fConnected = ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+    BOOL fConnected = ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
-    if (fConnected) {
-        bridge_log(LL_INFO, "Successfully connected to RPC client via named pipe.\n");
-        bridge_log(LL_INFO, "Creating socket to Discord client.\n");
+    if (!fConnected) {
+        LPTSTR lpBuffer = GetLastErrorAsString();
+        bridge_log(LL_ERROR, "Failed to connect to RPC client: %s", lpBuffer);
+        LocalFree(lpBuffer);
+        exit_code = EXIT_FAILURE; goto close_pipe;
+    }
 
-        if ((sock_fd = linux_socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-            bridge_log(LL_ERROR, "Failed to create socket to Discord client: %s.\n", _T(strerror(-sock_fd)));
-            return EXIT_FAILURE;
+    bridge_log(LL_INFO, "Successfully connected to RPC client.\n");
+    bridge_log(LL_INFO, "Creating socket to Discord client.\n");
+
+    if ((sock_fd = linux_socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+        bridge_log(LL_ERROR, "Failed to create socket: %s.\n", strerror(-sock_fd));
+        exit_code = EXIT_FAILURE; goto close_pipe;
+    }
+
+    sockaddr_un sock_addr = {0};
+    sock_addr.sun_family = AF_UNIX;
+
+    const char *temp_path = get_sock_parent_path();
+
+    const char *sock_path_templates[] = {
+        "%s/discord-ipc-%d",
+        "%s/app/com.discordapp.Discord/discord-ipc-%d",
+        "%s/snap.discord-canary/discord-ipc-%d",
+        "%s/snap.discord/discord-ipc-%d"
+    };
+
+    int error = 0;
+
+    for (size_t i = 0; i < ARRLEN(sock_path_templates); i++) {
+        for (int pipe = 0; pipe <= 9; pipe++) {
+            snprintf(sock_addr.sun_path, sizeof(sock_addr.sun_path), sock_path_templates[i], temp_path, pipe);
+            bridge_log(LL_INFO, "Attempting to connect to socket at \"%s\".\n", sock_addr.sun_path);
+            if ((error = linux_connect(sock_fd, (sockaddr*)&sock_addr, sizeof(sock_addr))) < 0)
+                bridge_log(LL_WARNING, "Failed to connect to socket: %s\n", strerror(-error));
+            else
+                goto breakout;
         }
-
-        sockaddr_un sock_addr = {0};
-        sock_addr.sun_family = AF_UNIX;
-
-        const char *temp_path = get_sock_parent_path();
-
-        const char *sock_path_templates[] = {
-            "%s/discord-ipc-%d",
-            "%s/app/com.discordapp.Discord/discord-ipc-%d",
-            "%s/snap.discord-canary/discord-ipc-%d",
-            "%s/snap.discord/discord-ipc-%d"
-        };
-
-        int error = 0;
-
-        for (size_t i = 0; i < ARRLEN(sock_path_templates); i++) {
-            for (int pipe = 0; pipe <= 9; pipe++) {
-                snprintf(sock_addr.sun_path, sizeof(sock_addr.sun_path), sock_path_templates[i], temp_path, pipe);
-                bridge_log(LL_INFO, "Attempting to connect to socket at \"%s.\"\n", _T(sock_addr.sun_path));
-                if ((error = linux_connect(sock_fd, (sockaddr*)&sock_addr, sizeof(sock_addr))) < 0)
-                    bridge_log(LL_WARNING, "Failed to connect to socket: %s\n", _T(strerror(-error)));
-                else
-                    goto breakout;
-            }
-        }
+    }
 
 
 breakout:
 
-        if (error) {
-            bridge_log(LL_ERROR, "Could not connect to a Discord client.\n");
-            return EXIT_FAILURE;
+    if (error) {
+        bridge_log(LL_ERROR, "Could not connect to a Discord client.\n");
+        exit_code = EXIT_FAILURE; goto close_socket;
+    }
+
+    bridge_log(LL_INFO, "Successfully connected to Discord client.\n");
+
+    hThread = CreateThread(
+            NULL,               // no security attribute
+            0,                  // default stack size
+            winwrite_thread,    // thread proc
+            (LPVOID) NULL,      // thread parameter
+            0,                  // not suspended
+            &dwThreadId);       // returns thread ID
+
+    if (hThread == NULL)
+    {
+        LPTSTR lpBuffer = GetLastErrorAsString();
+        bridge_log(LL_ERROR, "Failed to create thread: %s", lpBuffer); 
+        LocalFree(lpBuffer);
+        exit_code = EXIT_FAILURE; goto close_socket;
+    }
+
+    while (TRUE) {
+        char buf[BUFSIZE];
+        DWORD bytes_read = 0;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
+        BOOL fSuccess = ReadFile(
+            hPipe,          // Pipe handle
+            buf,            // Buffer to receive data
+            BUFSIZE,        // Buffer size
+            &bytes_read,    // Pointer to receive number of bytes read
+            NULL            // Not asynchronous
+        );
+
+        if (!fSuccess) {
+            DWORD dwError = GetLastError();
+            if (dwError == ERROR_BROKEN_PIPE) {
+                bridge_log(LL_WARNING, "Connection closed by RPC client.\n");
+                goto close_socket;
+            } else if (dwError != ERROR_OPERATION_ABORTED) {
+                LPTSTR lpBuffer = GetLastErrorAsString();
+                bridge_log(LL_ERROR, "Failed to read from named pipe: %s");
+                LocalFree(lpBuffer);
+                exit_code = EXIT_FAILURE;
+            }
+            goto close_socket;
         }
 
-        bridge_log(LL_INFO, "Successfully connected to Discord client.\n");
+        bridge_log(LL_INFO, "%lu bytes written from RPC client to Discord client.\n", bytes_read);
 
-        hThread = CreateThread(
-                NULL,               // no security attribute
-                0,                  // default stack size
-                winwrite_thread,    // thread proc
-                (LPVOID) NULL,      // thread parameter
-                0,                  // not suspended
-                &dwThreadId);       // returns thread ID
+        long unsigned int total_written = 0;
+        int written = 0;
 
-        if (hThread == NULL)
-        {
-            LPTSTR lpBuffer = GetLastErrorAsString();
-            bridge_log(LL_ERROR, "Failed to create thread: %s", lpBuffer); 
-            LocalFree(lpBuffer);
-            return EXIT_FAILURE;
-        }
-
-
-        while (TRUE) {
-            char buf[BUFSIZE];
-            DWORD bytes_read = 0;
-            BOOL fSuccess = ReadFile(
-                    hPipe,          // handle to pipe
-                    buf,            // buffer to receive data
-                    BUFSIZE,        // size of buffer
-                    &bytes_read,    // number of bytes read
-                    NULL            // not overlapped I/O
-                );
-
-            if (!fSuccess) {
-                if (GetLastError() == ERROR_BROKEN_PIPE) {
-                    bridge_log(LL_WARNING, "Connection closed by RPC client.\n");
-                    return EXIT_SUCCESS;
-                } else {
-                    LPTSTR lpBuffer = GetLastErrorAsString();
-                    bridge_log(LL_ERROR, "Failed to read from named pipe: %s");
-                    LocalFree(lpBuffer);
-                    return EXIT_FAILURE;
-                }
+        while (total_written < bytes_read) {
+            written = linux_write(sock_fd, buf + total_written, bytes_read - total_written);
+            if (written < 0) {
+                bridge_log(LL_ERROR, "Failed to write to socket: %s.\n", strerror(-written));
+                exit_code = EXIT_FAILURE; goto close_socket;
             }
-
-            bridge_log(LL_INFO, "%lu bytes written from RPC client to Discord client.\n", bytes_read);
-
-            long unsigned int total_written = 0;
-            int written = 0;
-
-            while (total_written < bytes_read) {
-                written = linux_write(sock_fd, buf + total_written, bytes_read - total_written);
-                if (written < 0) {
-                    bridge_log(LL_ERROR, "Failed to write to socket: %s.\n", _T(strerror(-written)));
-                    return EXIT_FAILURE;
-                }
-                total_written += written;
-                written = 0;
-            }
+            total_written += written;
+            written = 0;
         }
     }
 
-    else {
-        // The client could not connect, so close the pipe.
-        CloseHandle(hPipe);
-    }
-
-    return EXIT_SUCCESS;
-
-
+close_socket:
+    linux_close(sock_fd);
+close_pipe:
+    CloseHandle(hPipe);
+exit:
+    return exit_code;
 }

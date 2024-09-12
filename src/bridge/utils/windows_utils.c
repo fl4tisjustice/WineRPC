@@ -21,23 +21,22 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <tchar.h>
 #include <assert.h>
 #include <stdarg.h>
 
 #include "bridge/utils/windows_utils.h"
 
-LPTSTR GetLastErrorAsString(VOID) {
-    LPTSTR lpBuffer = NULL;
+LPSTR GetLastErrorAsString(VOID) {
+    LPSTR lpBuffer = NULL;
     DWORD dwErrorCode = GetLastError();
 
     DWORD cchBufferLength =
-        FormatMessage(
+        FormatMessageA(
             FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL,
             dwErrorCode,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPTSTR)&lpBuffer,
+            (LPSTR)&lpBuffer,
             0,
             NULL
         );
@@ -45,14 +44,4 @@ LPTSTR GetLastErrorAsString(VOID) {
     assert(cchBufferLength > 0 && "FormatMessage");
 
     return lpBuffer;
-}
-
-int winprintf(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-
-    int ret = _vtprintf(_T(fmt), args);
-
-    va_end(args);
-    return ret;
 }
