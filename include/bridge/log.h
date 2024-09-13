@@ -35,4 +35,5 @@ enum log_level {
 };
 
 extern enum log_level g_log_level;
-void bridge_log(enum log_level log_level, const char *fmt, ...);
+void __attribute__((format(printf, 2, 3))) \
+    bridge_log(enum log_level log_level, const char *fmt, ...);

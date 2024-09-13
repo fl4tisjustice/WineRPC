@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "bridge/utils/arg_parser.h"
 #include "bridge/log.h"
@@ -34,7 +35,8 @@
     }
 
 static const struct option long_options[] = {
-    {"log-level", required_argument, 0,  'l'}
+    {"log-level", required_argument, NULL,  'l'},
+    {0,           0,                 0,   0 }
 };
 
 void parse_args(int argc, char *argv[]) {
@@ -42,12 +44,14 @@ void parse_args(int argc, char *argv[]) {
     while (1) {
         int option_index = 0;
 
-        c = getopt_long_only(argc, argv, "l", long_options, &option_index);
+        opterr = 0; // Disable error messages since we provide our own
+        c = getopt_long(argc, argv, "", long_options, &option_index);
 
         if (c == -1) break;
 
         switch (c) {
-            case 0: break;
+            case 0:
+                break;
             case 'l': {
                 CMP_ARG_ASSIGN("none",    g_log_level, LL_NONE);
                 CMP_ARG_ASSIGN("error",   g_log_level, LL_ERROR);
@@ -55,10 +59,16 @@ void parse_args(int argc, char *argv[]) {
                 CMP_ARG_ASSIGN("info",    g_log_level, LL_INFO);
                 CMP_ARG_ASSIGN("debug",   g_log_level, LL_DEBUG);
                 CMP_ARG_ASSIGN("trace",   g_log_level, LL_TRACE);
-                assert(0 && "Invalid log level");
-                break;
+                // No match, meaning invalid value
+
+                g_log_level = LL_ERROR;
+                bridge_log(LL_ERROR, "Invalid log level. Please supply either no log value to silence the program or a valid one.\n");
+                exit(EXIT_FAILURE);
             }
-            case '?':
+            case '?': // Unknown option
+                g_log_level = LL_WARNING;
+                bridge_log(LL_WARNING, "Unkown option given. Assuming log level set to \"none\".\n");
+                g_log_level = LL_NONE;
                 break;
             default:
                 abort();

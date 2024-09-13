@@ -69,17 +69,17 @@ int main(int argc, char *argv[])  {
 
     // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea
     hPipe = CreateNamedPipeA(
-            lpszPipename,           // pipe name
-            PIPE_ACCESS_DUPLEX,     // read/write access
-            PIPE_TYPE_BYTE |        // message type pipe
-            PIPE_READMODE_BYTE |    // message-read mode
-            PIPE_WAIT,              // blocking mode
-            1,                      // max. instances
-            BUF_SIZE,                // output buffer size
-            BUF_SIZE,                // input buffer size
-            0,                      // client time-out
-            NULL                    // default security attribute
-        );
+        lpszPipename,           // pipe name
+        PIPE_ACCESS_DUPLEX,     // read/write access
+        PIPE_TYPE_BYTE |        // message type pipe
+        PIPE_READMODE_BYTE |    // message-read mode
+        PIPE_WAIT,              // blocking mode
+        1,                      // max. instances
+        BUF_SIZE,               // output buffer size
+        BUF_SIZE,               // input buffer size
+        0,                      // client time-out
+        NULL                    // default security attribute
+    );
 
     if (hPipe == INVALID_HANDLE_VALUE) {
         LPTSTR lpBuffer = GetLastErrorAsString();
@@ -167,7 +167,7 @@ breakout:
         BOOL fSuccess = ReadFile(
             hPipe,          // Pipe handle
             buf,            // Buffer to receive data
-            BUF_SIZE,        // Buffer size
+            BUF_SIZE - 1,   // Buffer size; Allow us to null-terminate just in case
             &bytes_read,    // Pointer to receive number of bytes read
             NULL            // Not asynchronous
         );
@@ -178,7 +178,7 @@ breakout:
                 bridge_log(LL_WARNING, "Connection closed by RPC client.\n");
             } else if (dwError != ERROR_OPERATION_ABORTED) {
                 LPTSTR lpBuffer = GetLastErrorAsString();
-                bridge_log(LL_ERROR, "Failed to read from named pipe: %s");
+                bridge_log(LL_ERROR, "Failed to read from named pipe: %s", lpBuffer);
                 LocalFree(lpBuffer);
                 exit_code = EXIT_FAILURE;
             }
@@ -186,9 +186,10 @@ breakout:
         }
 
         // Null-terminate messages so printf doesn't read past into leftover bytes from previous write
+        // fSuccess = TRUE means bytes_read < BUF_SIZE
         buf[bytes_read] = '\0';
 
-        bridge_log(LL_INFO, "%zu bytes received from RPC client.\n", bytes_read);
+        bridge_log(LL_INFO, "%lu bytes received from RPC client.\n", bytes_read);
         bridge_log(LL_DEBUG, "%s\n", SKIP_GPG_KEY(buf));
 
         long unsigned int total_written = 0;
@@ -242,7 +243,7 @@ DWORD WINAPI winwrite_thread() {
 
     while (TRUE) {
         char buf[BUF_SIZE];
-        ssize_t bytes_read = linux_read(sock_fd, buf, BUF_SIZE);
+        ssize_t bytes_read = linux_read(sock_fd, buf, BUF_SIZE - 1);  // Allow us to null-terminate on the off-chance
 
         if (bytes_read < 0) {
             bridge_log(LL_ERROR, "Failed to read from socket: %s.\n", strerror(-bytes_read));
@@ -257,7 +258,7 @@ DWORD WINAPI winwrite_thread() {
         // Null-terminate messages so printf doesn't read past into leftover bytes from previous write
         buf[bytes_read] = '\0';
 
-        bridge_log(LL_INFO, "%zu bytes received from Discord client.\n", bytes_read);
+        bridge_log(LL_INFO, "%ld bytes received from Discord client.\n", (long int)bytes_read);
         bridge_log(LL_DEBUG, "%s\n", SKIP_GPG_KEY(buf));
 
         DWORD total_written = 0, cbWritten = 0;

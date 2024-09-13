@@ -42,12 +42,24 @@
 
 #define linux_syscall(nr, ...) _linux_syscall(nr, _REVERSE(_ARG_COUNT(__VA_ARGS__), __VA_ARGS__))
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wint-conversion"
+enum syscall_nr {
+    NR_READ        = 0x03,
+    NR_WRITE       = 0x04,
+    NR_OPEN        = 0x05,
+    NR_CLOSE       = 0x06,
+    NR_SOCKETCALL  = 0x66,
+    NR_MMAP2       = 0xC0,
+    NR_MUNMAP      = 0x5B
+};
 
-inline void *__linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
-                                  uint32_t arg3, uint32_t arg4, uint32_t arg5) {
-    void *ret;
+enum socketcall_type{
+    SC_SOCKET  = 0x01,
+    SC_CONNECT = 0x03
+};
+
+inline uint32_t __linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
+                                     uint32_t arg3, uint32_t arg4, uint32_t arg5) {
+    uint32_t ret;
 
     __asm__ __volatile__ (
         "int 0x80\n\t"
@@ -60,7 +72,7 @@ inline void *__linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
     return ret;
 }
 
-void *_linux_syscall(enum syscall_nr nr, ...) {
+uint32_t _linux_syscall(enum syscall_nr nr, ...) {
     uint32_t arg1, arg2, arg3, arg4, arg5;
     arg1 = arg2 = arg3 = arg4 = arg5 = 0;
 
@@ -92,12 +104,12 @@ void *_linux_syscall(enum syscall_nr nr, ...) {
 }
 
 ssize_t linux_read(int fd, void *buf, size_t count) {
-    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, buf, count);
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, (uint32_t)(uintptr_t)buf, (unsigned long)count);
     return linux_syscall(NR_READ, fd, buf, count);
 }
 
 ssize_t linux_write(int fd, const void *buf, size_t count) {
-    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, buf, count);
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, (uint32_t)(uintptr_t)buf, (unsigned long)count);
     return linux_syscall(NR_WRITE, fd, buf, count);
 }
 
@@ -118,19 +130,18 @@ int linux_socket(int domain, int type, int protocol) {
 }
 
 int linux_connect(int socket, sockaddr *address, size_t address_len) {
-    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, socket, address, address_len);
-    uint32_t args[] = { socket, address, address_len };
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, socket, (uint32_t)(uintptr_t)address, (unsigned long)address_len);
+    uint32_t args[] = { socket, (uintptr_t)address, address_len };
     return linux_syscall(NR_SOCKETCALL, SC_CONNECT, args);
 }
 
 void *linux_mmap2(void *addr, size_t len, int prot, int flags, int fd) {
-    bridge_log(LL_TRACE, "%s(0x%08X, %lu, %d, %d, %d)\n", __func__, addr, len, prot, flags, fd);
-    return linux_syscall(NR_MMAP2, addr, len, prot, flags, fd);
+    bridge_log(LL_TRACE, "%s(0x%08X, %lu, %d, %d, %d)\n", __func__, (uint32_t)(uintptr_t)addr, (unsigned long)len, prot, flags, fd);
+    return (void*)(uintptr_t)linux_syscall(NR_MMAP2, addr, len, prot, flags, fd);
 }
 
 int linux_munmap(void *addr, size_t len) {
-    bridge_log(LL_TRACE, "%s(0x%08X, %lu)\n", __func__, addr, len);
+    bridge_log(LL_TRACE, "%s(0x%08X, %lu)\n", __func__, (uint32_t)(uintptr_t)addr, (unsigned long)len);
     return linux_syscall(NR_MUNMAP, addr, len);
 }
 
-#pragma GCC diagnostic pop
