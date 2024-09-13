@@ -30,30 +30,30 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include "bridge/utils/linux_utils.h"
-#include "bridge/utils/windows_utils.h"
+#include "bridge/utils/linux.h"
+#include "bridge/utils/windows.h"
 #include "bridge/utils/arg_parser.h"
 #include "bridge/log.h"
 
-#define ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ARR_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #define AF_UNIX     1
 #define SOCK_STREAM 1
-#define BUFSIZE     2048 // size of read/write buffers
+#define BUF_SIZE     2048 // size of read/write buffers
 
 static HANDLE hPipe;
 static int sock_fd;
 
 enum log_level g_log_level = _INVALID;
 
-static const char* get_sock_parent_path();
+static const char* get_sock_parent_path(void);
 DWORD WINAPI winwrite_thread();
 
 int main(int argc, char *argv[])  {
     int exit_code = EXIT_SUCCESS;
 
     parse_args(argc, argv);
-    
+
     if (g_log_level == _INVALID) {
         g_log_level = LL_WARNING;
         bridge_log(LL_WARNING, "Log level not set, assuming \"none\".\n");
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])  {
     DWORD   dwThreadId          = 0;
     DWORD   dwThreadExitCode    = 0;
     HANDLE  hThread             = NULL;
-    LPCSTR  lpszPipename        = "\\\\.\\pipe\\discord-ipc-0";
+    LPCSTR  lpszPipename        = "//./pipe/discord-ipc-0";
 
     bridge_log(LL_INFO, "Creating named pipe for connection to RPC client at \"%s\".\n", lpszPipename);
 
@@ -75,15 +75,15 @@ int main(int argc, char *argv[])  {
             PIPE_READMODE_BYTE |    // message-read mode
             PIPE_WAIT,              // blocking mode
             1,                      // max. instances
-            BUFSIZE,                // output buffer size
-            BUFSIZE,                // input buffer size
+            BUF_SIZE,                // output buffer size
+            BUF_SIZE,                // input buffer size
             0,                      // client time-out
             NULL                    // default security attribute
         );
 
     if (hPipe == INVALID_HANDLE_VALUE) {
         LPTSTR lpBuffer = GetLastErrorAsString();
-        bridge_log(LL_ERROR, "Failed to create named pipe: %s", lpBuffer); 
+        bridge_log(LL_ERROR, "Failed to create named pipe: %s", lpBuffer);
         LocalFree(lpBuffer);
         exit_code = EXIT_FAILURE; goto exit;
     }
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])  {
 
     int error = 0;
 
-    for (size_t i = 0; i < ARRLEN(sock_path_templates); i++) {
+    for (size_t i = 0; i < ARR_LEN(sock_path_templates); i++) {
         for (int pipe = 0; pipe <= 9; pipe++) {
             snprintf(sock_addr.sun_path, sizeof(sock_addr.sun_path), sock_path_templates[i], temp_path, pipe);
             bridge_log(LL_INFO, "Attempting to connect to socket at \"%s\".\n", sock_addr.sun_path);
@@ -154,20 +154,20 @@ breakout:
 
     if (hThread == NULL) {
         LPTSTR lpBuffer = GetLastErrorAsString();
-        bridge_log(LL_ERROR, "Failed to create thread: %s", lpBuffer); 
+        bridge_log(LL_ERROR, "Failed to create thread: %s", lpBuffer);
         LocalFree(lpBuffer);
         exit_code = EXIT_FAILURE; goto close_socket;
     }
 
     while (TRUE) {
-        char buf[BUFSIZE];
+        char buf[BUF_SIZE];
         DWORD bytes_read = 0;
 
         // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
         BOOL fSuccess = ReadFile(
             hPipe,          // Pipe handle
             buf,            // Buffer to receive data
-            BUFSIZE,        // Buffer size
+            BUF_SIZE,        // Buffer size
             &bytes_read,    // Pointer to receive number of bytes read
             NULL            // Not asynchronous
         );
@@ -176,7 +176,6 @@ breakout:
             DWORD dwError = GetLastError();
             if (dwError == ERROR_BROKEN_PIPE) {
                 bridge_log(LL_WARNING, "Connection closed by RPC client.\n");
-                goto cleanup;
             } else if (dwError != ERROR_OPERATION_ABORTED) {
                 LPTSTR lpBuffer = GetLastErrorAsString();
                 bridge_log(LL_ERROR, "Failed to read from named pipe: %s");
@@ -186,7 +185,11 @@ breakout:
             goto cleanup;
         }
 
-        bridge_log(LL_INFO, "%lu bytes written from RPC client to Discord client.\n", bytes_read);
+        // Null-terminate messages so printf doesn't read past into leftover bytes from previous write
+        buf[bytes_read] = '\0';
+
+        bridge_log(LL_INFO, "%zu bytes received from RPC client.\n", bytes_read);
+        bridge_log(LL_DEBUG, "%s\n", SKIP_GPG_KEY(buf));
 
         long unsigned int total_written = 0;
         int written = 0;
@@ -222,14 +225,14 @@ exit:
     return exit_code;
 }
 
-static const char* get_sock_parent_path() {
+static const char* get_sock_parent_path(void) {
     const char *env_tmp_paths[] = {"XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"};
     char *path;
 
-    for (size_t i = 0; i < ARRLEN(env_tmp_paths); i++)
+    for (size_t i = 0; i < ARR_LEN(env_tmp_paths); i++)
         if ((path = getenv(env_tmp_paths[i])))
             return path;
-    
+
     return "/tmp";
 }
 
@@ -238,8 +241,8 @@ DWORD WINAPI winwrite_thread() {
     DWORD dwExitCode = EXIT_SUCCESS;
 
     while (TRUE) {
-        char buf[BUFSIZE];
-        ssize_t bytes_read = linux_read(sock_fd, buf, BUFSIZE);
+        char buf[BUF_SIZE];
+        ssize_t bytes_read = linux_read(sock_fd, buf, BUF_SIZE);
 
         if (bytes_read < 0) {
             bridge_log(LL_ERROR, "Failed to read from socket: %s.\n", strerror(-bytes_read));
@@ -251,7 +254,11 @@ DWORD WINAPI winwrite_thread() {
             break;
         }
 
-        bridge_log(LL_INFO, "%zu bytes written from Discord client to RPC client.\n", bytes_read);
+        // Null-terminate messages so printf doesn't read past into leftover bytes from previous write
+        buf[bytes_read] = '\0';
+
+        bridge_log(LL_INFO, "%zu bytes received from Discord client.\n", bytes_read);
+        bridge_log(LL_DEBUG, "%s\n", SKIP_GPG_KEY(buf));
 
         DWORD total_written = 0, cbWritten = 0;
 
@@ -265,7 +272,7 @@ DWORD WINAPI winwrite_thread() {
                 &cbWritten,                 // Pointer to receive number of bytes written
                 NULL                        // not overlapped I/O
             );
-                                  
+
             if (!fSuccess) {
                 LPTSTR lpBuffer = GetLastErrorAsString();
                 bridge_log(LL_ERROR, "Failed to write to named pipe: %s", lpBuffer);

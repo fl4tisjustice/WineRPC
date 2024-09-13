@@ -24,7 +24,7 @@
 #include <assert.h>
 
 #include "bridge/log.h"
-#include "bridge/utils/windows_utils.h"
+#include "bridge/utils/windows.h"
 
 void bridge_log(enum log_level log_level, const char *fmt, ...) {
     if (g_log_level < log_level) return;

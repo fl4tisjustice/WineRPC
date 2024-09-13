@@ -24,7 +24,7 @@
 #include <assert.h>
 #include <stdarg.h>
 
-#include "bridge/utils/windows_utils.h"
+#include "bridge/utils/windows.h"
 
 LPSTR GetLastErrorAsString(VOID) {
     LPSTR lpBuffer = NULL;

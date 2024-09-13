@@ -24,7 +24,8 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "bridge/utils/linux_utils.h"
+#include "bridge/utils/linux.h"
+#include "bridge/log.h"
 
 #define __ARG_COUNT(_10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
 #define _ARG_COUNT(...) __ARG_COUNT(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
@@ -44,7 +45,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wint-conversion"
 
-inline void* __linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
+inline void *__linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
                                   uint32_t arg3, uint32_t arg4, uint32_t arg5) {
     void *ret;
 
@@ -60,7 +61,6 @@ inline void* __linux_syscall(enum syscall_nr nr, uint32_t arg1, uint32_t arg2,
 }
 
 void *_linux_syscall(enum syscall_nr nr, ...) {
-
     uint32_t arg1, arg2, arg3, arg4, arg5;
     arg1 = arg2 = arg3 = arg4 = arg5 = 0;
 
@@ -92,36 +92,44 @@ void *_linux_syscall(enum syscall_nr nr, ...) {
 }
 
 ssize_t linux_read(int fd, void *buf, size_t count) {
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, buf, count);
     return linux_syscall(NR_READ, fd, buf, count);
 }
 
 ssize_t linux_write(int fd, const void *buf, size_t count) {
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, fd, buf, count);
     return linux_syscall(NR_WRITE, fd, buf, count);
 }
 
 int linux_open(const char *path, int flags, int mode) {
+    bridge_log(LL_TRACE, "%s(%s, %d, %d)\n", __func__, path, flags, mode);
     return linux_syscall(NR_OPEN, path, flags, mode);
 }
 
 int linux_close(int fd) {
+    bridge_log(LL_TRACE, "%s(%d)\n", __func__, fd);
     return linux_syscall(NR_CLOSE, fd);
 }
 
 int linux_socket(int domain, int type, int protocol) {
+    bridge_log(LL_TRACE, "%s(%d, %d, %d)\n", __func__, domain, type, protocol);
     uint32_t args[] = { domain, type, protocol };
     return linux_syscall(NR_SOCKETCALL, SC_SOCKET, args);
 }
 
 int linux_connect(int socket, sockaddr *address, size_t address_len) {
+    bridge_log(LL_TRACE, "%s(%d, 0x%08X, %lu)\n", __func__, socket, address, address_len);
     uint32_t args[] = { socket, address, address_len };
     return linux_syscall(NR_SOCKETCALL, SC_CONNECT, args);
 }
 
 void *linux_mmap2(void *addr, size_t len, int prot, int flags, int fd) {
+    bridge_log(LL_TRACE, "%s(0x%08X, %lu, %d, %d, %d)\n", __func__, addr, len, prot, flags, fd);
     return linux_syscall(NR_MMAP2, addr, len, prot, flags, fd);
 }
 
 int linux_munmap(void *addr, size_t len) {
+    bridge_log(LL_TRACE, "%s(0x%08X, %lu)\n", __func__, addr, len);
     return linux_syscall(NR_MUNMAP, addr, len);
 }
 

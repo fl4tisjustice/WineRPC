@@ -21,6 +21,9 @@
 
 #pragma once
 
+#define GPG_KEY_SIZE 8
+#define SKIP_GPG_KEY(buf) (&buf[GPG_KEY_SIZE])
+
 enum log_level {
     _INVALID = -1,
     LL_NONE,

@@ -33,7 +33,7 @@
         break;                                      \
     }
 
-static struct option long_options[] = {
+static const struct option long_options[] = {
     {"log-level", required_argument, 0,  'l'}
 };
 
@@ -49,10 +49,12 @@ void parse_args(int argc, char *argv[]) {
         switch (c) {
             case 0: break;
             case 'l': {
-                CMP_ARG_ASSIGN("none",  g_log_level, LL_NONE);
-                CMP_ARG_ASSIGN("info",  g_log_level, LL_INFO);
-                CMP_ARG_ASSIGN("trace", g_log_level, LL_TRACE);
-                CMP_ARG_ASSIGN("debug", g_log_level, LL_DEBUG);
+                CMP_ARG_ASSIGN("none",    g_log_level, LL_NONE);
+                CMP_ARG_ASSIGN("error",   g_log_level, LL_ERROR);
+                CMP_ARG_ASSIGN("warning", g_log_level, LL_WARNING);
+                CMP_ARG_ASSIGN("info",    g_log_level, LL_INFO);
+                CMP_ARG_ASSIGN("debug",   g_log_level, LL_DEBUG);
+                CMP_ARG_ASSIGN("trace",   g_log_level, LL_TRACE);
                 assert(0 && "Invalid log level");
                 break;
             }
