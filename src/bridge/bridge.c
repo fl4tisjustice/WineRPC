@@ -37,8 +37,8 @@
 
 #define ARR_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
-#define AF_UNIX     1
-#define SOCK_STREAM 1
+#define AF_UNIX      1
+#define SOCK_STREAM  1
 #define BUF_SIZE     2048 // size of read/write buffers
 
 static HANDLE hPipe;
@@ -69,16 +69,16 @@ int main(int argc, char *argv[])  {
 
     // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea
     hPipe = CreateNamedPipeA(
-        lpszPipename,           // pipe name
-        PIPE_ACCESS_DUPLEX,     // read/write access
-        PIPE_TYPE_BYTE |        // message type pipe
-        PIPE_READMODE_BYTE |    // message-read mode
-        PIPE_WAIT,              // blocking mode
-        1,                      // max. instances
-        BUF_SIZE,               // output buffer size
-        BUF_SIZE,               // input buffer size
-        0,                      // client time-out
-        NULL                    // default security attribute
+        lpszPipename,           // Pipe name
+        PIPE_ACCESS_DUPLEX,     // RW access
+        PIPE_TYPE_BYTE |        // Message type pipe
+        PIPE_READMODE_BYTE |    // Message-read mode
+        PIPE_WAIT,              // Blocking mode
+        1,                      // Max number of instances
+        BUF_SIZE,               // Output buffer size
+        BUF_SIZE,               // Input buffer size
+        0,                      // Client time-out
+        NULL                    // Default security attribute
     );
 
     if (hPipe == INVALID_HANDLE_VALUE) {
@@ -91,6 +91,7 @@ int main(int argc, char *argv[])  {
     bridge_log(LL_INFO, "Successfully created named pipe.\n");
     bridge_log(LL_INFO, "Awaiting connection from RPC client.\n");
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-connectnamedpipe
     BOOL fConnected = ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
     if (!fConnected) {
@@ -143,9 +144,10 @@ breakout:
 
     bridge_log(LL_INFO, "Successfully connected to Discord client.\n");
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createthread
     hThread = CreateThread(
-        NULL,               // no security attribute
-        0,                  // default stack size
+        NULL,               // Default security attribute
+        0,                  // Default stack size
         winwrite_thread,    // thread proc
         (LPVOID) NULL,      // thread parameter
         0,                  // not suspended
@@ -238,7 +240,10 @@ static const char* get_sock_parent_path(void) {
 }
 
 
-DWORD WINAPI winwrite_thread() {
+DWORD WINAPI winwrite_thread(LPVOID lpUnused) {
+    // Just to match function signature
+    (VOID)lpUnused;
+
     DWORD dwExitCode = EXIT_SUCCESS;
 
     while (TRUE) {
@@ -271,7 +276,7 @@ DWORD WINAPI winwrite_thread() {
                 buf + total_written,        // Buffer to write from
                 bytes_read - total_written, // Remaining unwritten bytes
                 &cbWritten,                 // Pointer to receive number of bytes written
-                NULL                        // not overlapped I/O
+                NULL                        // NULL = Synchronous I/O
             );
 
             if (!fSuccess) {

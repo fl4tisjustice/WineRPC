@@ -24,11 +24,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define PROT_READ 1
-#define PROT_WRITE 2
+#define PROT_READ   1
+#define PROT_WRITE  2
 #define MAP_PRIVATE 0x02
-#define MAP_FIXED 0x10
-#define MAP_ANON 0x20
+#define MAP_FIXED   0x10
+#define MAP_ANON    0x20
 
 typedef struct {
     unsigned short sun_family;               /* AF_UNIX */
